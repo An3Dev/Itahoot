@@ -15,9 +15,15 @@ public class Manager : MonoBehaviourPunCallbacks
 
     public GameObject gamePanel;
     public GameObject leaderboardPanel;
-    public TextMeshProUGUI questionText;
+    public GameObject winnerPanel;
+    public TextMeshProUGUI firstPlaceName, secondPlaceName, thirdPlaceName, firstPlacePoints, secondPlacePoints, thirdPlacePoints, firstPlaceCorrectAns, secondPlaceCorrectAns, thirdPlaceCorrectAns;
+    public Transform leaderboardRowParent;
+    public GameObject countdownOverlay;
+    public TextMeshProUGUI countdownText;
+    public TextMeshProUGUI questionText, answerText;
     public TMP_InputField answerInputField;
     public Button sendButton;
+    public Button skipLeaderboardButton;
 
     public GameObject cardPrefab;
     public Transform cardParent;
@@ -25,7 +31,8 @@ public class Manager : MonoBehaviourPunCallbacks
     Menu menu;
 
     bool startCountdown = false;
-    float countdownTimer = 0;
+    float timerTime = 3;
+    float countdownTimer = 3;
 
     int currentRound = 0;
     float timeDuringRound = 0;
@@ -43,6 +50,9 @@ public class Manager : MonoBehaviourPunCallbacks
     Player[] playerList;
 
     Dictionary<int, long> pointsDictionary = new Dictionary<int, long>();
+
+    Dictionary<int, int> correctAnswers = new Dictionary<int, int>();
+    bool gameOver = false;
     // Start is called before the first frame update
     void Awake()
     {
@@ -63,6 +73,7 @@ public class Manager : MonoBehaviourPunCallbacks
         for(int i = 0; i < playerList.Length; i++)
         {
             pointsDictionary.Add(playerList[i].ActorNumber, 0);
+            correctAnswers.Add(playerList[i].ActorNumber, 0);
         }
 
         DisplayAllPlayers();
@@ -93,10 +104,7 @@ public class Manager : MonoBehaviourPunCallbacks
     {
         GameObject gameObject = Instantiate(cardPrefab, playerRowsParent);
         Card card = gameObject.GetComponent<Card>();
-        card.SetName(player.NickName);
-        card.InLobby();
-        //GameObject row = Instantiate(cardsList, playerRowsParent);
-        //row.GetComponentInChildren<TextMeshProUGUI>().text = player.NickName;
+        card.InLobby(player.NickName);
     }
 
     public override void OnPlayerEnteredRoom(Photon.Realtime.Player newPlayer)
@@ -116,14 +124,17 @@ public class Manager : MonoBehaviourPunCallbacks
         if (startCountdown)
         {
             countdownTimer -= Time.deltaTime;
+            countdownText.text = ((int)(countdownTimer + 0.99f)).ToString();
             if (countdownTimer <= 0)
             {
                 startCountdown = false;
-                ShowGamePanel();
+                playingRound = true;
+
+                // disable countdown screen
+                ShowCountdownOverlay(false);
             }
         }
-
-        if (playingRound)
+        else if (playingRound)
         {
             timeDuringRound += Time.deltaTime;
         }
@@ -131,6 +142,10 @@ public class Manager : MonoBehaviourPunCallbacks
 
     #region starting procedures
 
+    void ShowCountdownOverlay(bool show)
+    {
+        countdownOverlay.SetActive(show);
+    }
     public void OnStartButtonClicked()
     {
         // send rpc with question order
@@ -172,9 +187,9 @@ public class Manager : MonoBehaviourPunCallbacks
     [PunRPC]
     void StartingGame(long questionIndexes)
     {
-        StartCountdown();
-
         questionsInOrder = LongToArray(questionIndexes);
+
+        ShowGamePanel(true);
     }
 
     void StartCountdown()
@@ -193,9 +208,24 @@ public class Manager : MonoBehaviourPunCallbacks
         return array;
     }  
 
-    void ShowGamePanel()
+    void ShowGamePanel(bool show)
     {
+        if (!show)
+        {
+            gamePanel.SetActive(false);
+            ResetGamePanel();
+            return;
+        }
+
+        StartCountdown();
+        ResetGamePanel();
+
+        // overlay covering game panel. Shows countdown.
+        ShowCountdownOverlay(true);
+
         menu.DisableLobbyPanel();
+
+        // show countdown
 
         SetQuestionText();
 
@@ -204,14 +234,27 @@ public class Manager : MonoBehaviourPunCallbacks
         // enable these elements again
         answerInputField.gameObject.SetActive(true);
         sendButton.gameObject.SetActive(true);
+    }
 
-        // start timer.
-        playingRound = true;
+    void ResetGamePanel()
+    {
+        for (int i = 0; i < cardParent.childCount; i++)
+        {
+            Destroy(cardParent.GetChild(i).gameObject);
+        }
+
+        answerInputField.gameObject.SetActive(true);
+        answerInputField.text = "";
+        sendButton.gameObject.SetActive(true);
+        answerInfo.Clear();
+        answerText.text = "A: ????";
+        addedPoints = false;
+        countdownTimer = timerTime;
     }
 
     void SetQuestionText()
     {
-        questionText.text = questionsInOrder[currentRound];
+        questionText.text = "Q: " + questionsInOrder[currentRound];
     }
 
     #endregion starting procedures
@@ -239,9 +282,20 @@ public class Manager : MonoBehaviourPunCallbacks
             {
                 if (cardsList[i] != null && cardsList[i].IsSelected())
                 {
-                    selectedCards += cardsList[i].GetAnswerInfo().actorNumber + " ";
+                    // sets the correct answer text to the answer of the first card with correct answer
+                    if (selectedCards.Length < 1)
+                    {
+                        answerText.text = "A: " + cardsList[i].GetAnswerInfo().answer;
+                    }
+
+                    selectedCards += cardsList[i].GetAnswerInfo().actorNumber + " ";                   
                 }
             }
+            if (selectedCards.Length == 0)
+            {
+                answerText.text = "A: Nadie supo la respuesta.";
+            }
+
             // call add points rpc to add points on all devices
             photonView.RPC("AddPoints", RpcTarget.AllBuffered, selectedCards);
             addedPoints = true;
@@ -253,10 +307,80 @@ public class Manager : MonoBehaviourPunCallbacks
             Debug.Log("Go to leaderboard");
             gamePanel.SetActive(false);
             ShowLeaderboardPanel();
-            // delete all the cards.
+
+            // if finished last question
+            if (currentRound == questions.Count() - 1)
+            {
+                Debug.Log(currentRound + " " + questions.Count());
+                // show winner
+                gameOver = true;
+
+                ShowWinnerScreen();
+            }
         }
     }
 
+    void ShowWinnerScreen()
+    {
+        ShowGamePanel(false);
+        winnerPanel.SetActive(true);
+
+        List<long> pointsOrder = new List<long>();
+        List<int> actorNumberOrder = new List<int>();
+        for (int i = 0; i < pointsDictionary.Count; i++)
+        {
+            if (pointsOrder.Count > 0)
+            {
+                if (pointsDictionary[i] > pointsOrder[0])
+                {
+                    pointsOrder.Insert(0, pointsDictionary[i]);
+                    actorNumberOrder.Insert(0, i);
+                }
+                else if (pointsDictionary[i] == pointsOrder[0]) // tie breaker. 
+                {
+                    //if this user has more correct answers than first place
+                    if (correctAnswers[i] > correctAnswers[actorNumberOrder[0]])
+                    {
+                        pointsOrder.Insert(0, pointsDictionary[i]);
+                        actorNumberOrder.Insert(0, i);
+                    }
+                    else
+                    {
+                        // put in second place
+                        pointsOrder.Insert(1, pointsDictionary[i]);
+                        actorNumberOrder.Insert(1, i);
+                    }
+                }
+            }
+            else
+            {
+                pointsOrder.Add(pointsDictionary[1]);
+                actorNumberOrder.Add(1);
+            }
+        }
+
+        // spawn the rows
+        for (int i = 0; i < actorNumberOrder.Count; i++)
+        {
+            if (i == 0)
+            {
+                firstPlaceName.text = GetNameFromActorNum(actorNumberOrder[i]);
+                firstPlaceCorrectAns.text = correctAnswers[actorNumberOrder[i]].ToString() + " out of " + questions.Count();
+                firstPlacePoints.text = pointsDictionary[actorNumberOrder[i]].ToString();
+            } else if (i == 0)
+            {
+                secondPlaceName.text = GetNameFromActorNum(actorNumberOrder[i]);
+                secondPlaceCorrectAns.text = correctAnswers[actorNumberOrder[i]].ToString() + " out of " + questions.Count();
+                secondPlacePoints.text = pointsDictionary[actorNumberOrder[i]].ToString();
+            } else if (i == 3)
+            {
+                thirdPlaceName.text = GetNameFromActorNum(actorNumberOrder[i]);
+                thirdPlaceCorrectAns.text = correctAnswers[actorNumberOrder[i]].ToString() + " out of " + questions.Count();
+                thirdPlacePoints.text = pointsDictionary[actorNumberOrder[i]].ToString();
+                return;
+            }
+        }
+    }
 
     [PunRPC]
     void SendAnswerViaRPC(int actorNumber, string answer, float time)
@@ -328,6 +452,7 @@ public class Manager : MonoBehaviourPunCallbacks
                 // give points
                 long addedPoints = CalculatePointsFromTime(cardsList[i].GetTime());
                 pointsDictionary[i] += addedPoints;
+                correctAnswers[i] += 1;
                 cardsList[i].SetPoints(addedPoints);
                 cardsList[i].SetInteractable(false);
 
@@ -346,26 +471,76 @@ public class Manager : MonoBehaviourPunCallbacks
 
     void ShowLeaderboardPanel()
     {
-        leaderboardPanel.SetActive(true);
-        // populate leaderboard.
-
-        List<Dictionary<int, long>> order = new List<Dictionary<int, long>> ();
-        for(int i = 0; i < pointsDictionary.Count; i++)
+        for(int i = 0; i < leaderboardRowParent.childCount; i++)
         {
-
-            // TODO: fix this so that it makes a list with actor numbers in order from 0 to 7.
-            //if (order.Count > 0)
-            //{
-            //    if (pointsDictionary[i] > order[i])
-            //    {
-            //        order.Insert(0, pointsDictionary[i]);
-            //    }
-            //} else
-            //{
-            //    order.Add(pointsDictionary[i]);
-            //}
+            Destroy(leaderboardRowParent.GetChild(i).gameObject);
         }
 
+        leaderboardPanel.SetActive(true);
 
+        skipLeaderboardButton.gameObject.SetActive(PhotonNetwork.IsMasterClient);
+
+        // populate leaderboard.
+        List<long> pointsOrder = new List<long>();
+        List<int> actorNumberOrder = new List<int>();
+        for (int i = 0; i < pointsDictionary.Count; i++)
+        {
+            if (pointsOrder.Count > 0)
+            {
+                if (pointsDictionary[i] > pointsOrder[0])
+                {
+                    pointsOrder.Insert(0, pointsDictionary[i]);
+                    actorNumberOrder.Insert(0, i);
+                }
+                else if (pointsDictionary[i] == pointsOrder[0]) // tie breaker. 
+                {
+                    //if this user has more correct answers than first place
+                    if (correctAnswers[i] > correctAnswers[actorNumberOrder[0]])
+                    {
+                        pointsOrder.Insert(0, pointsDictionary[i]);
+                        actorNumberOrder.Insert(0, i);
+                    }
+                    else
+                    {
+                        // put in second place
+                        pointsOrder.Insert(1, pointsDictionary[i]);
+                        actorNumberOrder.Insert(1, i);
+                    }
+                }
+            }
+            else
+            {
+                pointsOrder.Add(pointsDictionary[1]);
+                actorNumberOrder.Add(1);
+            }
+        }
+
+        // spawn the rows
+        for (int i = 0; i < actorNumberOrder.Count; i++)
+        {
+            GameObject row = Instantiate(playerRowPrefab, leaderboardRowParent);
+            //sets the place
+            row.transform.GetChild(0).GetChild(0).GetComponent<TextMeshProUGUI>().text = (i + 1) + ".";
+            // sets the name
+            row.transform.GetChild(0).GetChild(1).GetComponent<TextMeshProUGUI>().text = GetNameFromActorNum(actorNumberOrder[i]);
+            // sets the points text
+            row.transform.GetChild(0).GetChild(2).GetComponent<TextMeshProUGUI>().text = pointsDictionary[actorNumberOrder[i]].ToString();
+        }
+    }
+
+    public void OnSkipLeaderboardClicked()
+    {
+        currentRound++;
+
+        leaderboardPanel.SetActive(false);
+        ShowGamePanel(true);// resets everything inside this method
+
+    }
+
+
+
+    public override void OnDisconnected(DisconnectCause cause)
+    {
+        PhotonNetwork.ReconnectAndRejoin();
     }
 }

@@ -82,6 +82,6 @@ public class Menu : MonoBehaviourPunCallbacks
         gameManager.gameObject.SetActive(true);
 
         // spawn player prefab
-        PhotonNetwork.Instantiate(playerPrefab, Vector2.zero, Quaternion.identity);
+        //PhotonNetwork.Instantiate(playerPrefab, Vector2.zero, Quaternion.identity);
     }
 }

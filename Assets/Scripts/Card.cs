@@ -6,7 +6,7 @@ using TMPro;
 public class Card : MonoBehaviour
 {
 
-    public TextMeshProUGUI nameText, timeText, answerText, pointsText, chatText;
+    public TextMeshProUGUI nameText, timeText, answerText, pointsText, lobbyText;
     public GameObject selectionPanel;
     public Button button;
 
@@ -14,7 +14,7 @@ public class Card : MonoBehaviour
     long points;
     bool selected = false;
     bool interactable = false;
-
+    string name;
     public Card()
     {
         points = 0;
@@ -44,22 +44,15 @@ public class Card : MonoBehaviour
         button.interactable = interactable;
     }
 
-    public void InLobby()
+    public void InLobby(string name)
     {
-        foreach(GameObject g in this.gameObject.transform)
+        for (int i = 0; i < transform.childCount; i++)
         {
-            g.SetActive(false);
+            transform.GetChild(i).gameObject.SetActive(false);
         }
 
-        // TODO: fix this
-        this.transform.GetChild(0).gameObject.SetActive(true);
-        nameText.gameObject.SetActive(true);
-        chatText.gameObject.SetActive(true);
-    }
-
-    public void SetChat(string text)
-    {
-        chatText.text = text;
+        lobbyText.text = name;
+        lobbyText.gameObject.SetActive(true);
     }
 
     public void SetName(string name)
