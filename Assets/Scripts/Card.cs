@@ -29,7 +29,7 @@ public class Card : MonoBehaviour
     public void SetAnswerInfo(AnswerInfo answerInfo)
     {
         this.answerInfo = answerInfo;
-        timeText.text = answerInfo.time.ToString();
+        timeText.text = string.Format("{0:##.#0}", answerInfo.time);
         answerText.text = "Answer is hidden.";
         answerText.fontStyle = FontStyles.Italic;
     }
@@ -64,7 +64,7 @@ public class Card : MonoBehaviour
     public void SetPoints(long points)
     {
         this.points = points;
-        pointsText.text = "+" + points;
+        pointsText.text = "+" + string.Format("{0:#,###0}", points);
     }
     public float GetTime()
     {

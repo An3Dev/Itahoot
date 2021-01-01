@@ -41,6 +41,10 @@ MonoBehaviour:
   - StartingGame
   - SendAnswerViaRPC
   - AddPoints
+  - GoToLeaderboard
+  - GoToNextRound
+  - GoToWinnerScreen
+  - SetAnswerText
   DisableAutoOpenWizard: 1
   ShowSettings: 0
   DevRegionSetOnce: 1

@@ -14,9 +14,9 @@ public class Menu : MonoBehaviourPunCallbacks
     public GameObject lobbyPanel;
 
 
+    float hold = 5;
 
-    const string playerPrefab = "Player";
-
+    const string playerPrefab = "Player";   
 
     private void Awake()
     {
@@ -27,8 +27,36 @@ public class Menu : MonoBehaviourPunCallbacks
         PhotonNetwork.ConnectUsingSettings();
     }
 
+    void Update()
+    {
+
+        if (!PhotonNetwork.IsConnectedAndReady)
+        {
+            loginButton.interactable = false;
+        } else
+        {
+            loginButton.interactable = true;
+        }
+        //if (!menuPanel.activeInHierarchy)
+        //{
+        //    return;
+        //}
+        //if (Input.GetMouseButton(0))
+        //{
+        //    hold -= Time.deltaTime;
+        //} else if (Input.GetMouseButtonUp(0))
+        //{
+        //    hold = 5;
+        //}
+        //if (hold <= 0)
+        //{
+        //    PhotonNetwork.SetMasterClient(PhotonNetwork.LocalPlayer);
+        //}
+    }
+
     public void OnInputFieldUpdated(string input)
     {
+
         if (IsStringAcceptable(input))
         {
             loginButton.gameObject.SetActive(true);
@@ -59,18 +87,33 @@ public class Menu : MonoBehaviourPunCallbacks
         if (PhotonNetwork.CountOfRooms > 0)
         {        
             PhotonNetwork.JoinRoom("Room");
+            Debug.Log("Room available");
         }
         else
         {
             RoomOptions options = new RoomOptions { MaxPlayers = 8 };
 
             PhotonNetwork.CreateRoom("Room", options, null);
+            Debug.Log("Room not available");
+
         }
     }
 
     public void DisableLobbyPanel()
     {
         lobbyPanel.SetActive(false);
+    }
+
+
+    public override void OnCreateRoomFailed(short returnCode, string message)
+    {
+        Debug.Log(message);
+        PhotonNetwork.JoinRoom("Room");
+    }
+
+    public override void OnJoinRoomFailed(short returnCode, string message)
+    {
+        PhotonNetwork.JoinRoom("Room");
     }
 
     public override void OnJoinedRoom()
@@ -84,4 +127,6 @@ public class Menu : MonoBehaviourPunCallbacks
         // spawn player prefab
         //PhotonNetwork.Instantiate(playerPrefab, Vector2.zero, Quaternion.identity);
     }
+
+    
 }
